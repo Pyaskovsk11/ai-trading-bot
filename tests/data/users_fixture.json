@@ -1,0 +1,30 @@
+[
+  {
+    "telegram_id": "123456789",
+    "username": "test_user1",
+    "email": "user1@example.com",
+    "whitelist_status": true,
+    "settings": {}
+  },
+  {
+    "telegram_id": "987654321",
+    "username": "test_user2",
+    "email": "user2@example.com",
+    "whitelist_status": false,
+    "settings": {"lang": "en"}
+  },
+  {
+    "telegram_id": "123456789",
+    "username": "duplicate_user",
+    "email": "user3@example.com",
+    "whitelist_status": true,
+    "settings": {}
+  },
+  {
+    "telegram_id": "",
+    "username": "no_telegram_id",
+    "email": "user4@example.com",
+    "whitelist_status": true,
+    "settings": {}
+  }
+] 

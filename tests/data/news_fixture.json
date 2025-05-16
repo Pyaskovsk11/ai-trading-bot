@@ -1,0 +1,42 @@
+[
+  {
+    "title": "Bitcoin Surges to New High",
+    "content": "BTC reached a new all-time high amid positive market sentiment.",
+    "source": "CryptoNews",
+    "published_at": "2024-05-01T12:00:00Z",
+    "sentiment_score": 0.8,
+    "processed": true,
+    "url": "https://example.com/news/1",
+    "affected_assets": ["BTC"]
+  },
+  {
+    "title": "Ethereum Faces Regulatory Pressure",
+    "content": "ETH price drops as new regulations are announced.",
+    "source": "CoinDesk",
+    "published_at": "2024-05-02T09:00:00Z",
+    "sentiment_score": -0.6,
+    "processed": false,
+    "url": "https://example.com/news/2",
+    "affected_assets": ["ETH"]
+  },
+  {
+    "title": "Market Unchanged",
+    "content": "No significant movements in the crypto market.",
+    "source": "CryptoTimes",
+    "published_at": "2024-05-03T15:00:00Z",
+    "sentiment_score": 0.0,
+    "processed": false,
+    "url": "https://example.com/news/3",
+    "affected_assets": []
+  },
+  {
+    "title": "Invalid Sentiment",
+    "content": "Test case with invalid sentiment score.",
+    "source": "TestSource",
+    "published_at": "2024-05-04T10:00:00Z",
+    "sentiment_score": 2.0,
+    "processed": false,
+    "url": "https://example.com/news/4",
+    "affected_assets": ["BTC", "ETH"]
+  }
+] 
