@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI Futures Trading Bot
 
 ## Быстрый старт
@@ -54,3 +55,7 @@ Swagger: http://localhost:8000/docs
 
 ## Контакты и поддержка
 Вопросы — в Issues или Telegram. 
+=======
+# ai-trading-bot
+My step to success
+>>>>>>> 515004a9685bc397c1bac403b62d654dc51a8b6a
