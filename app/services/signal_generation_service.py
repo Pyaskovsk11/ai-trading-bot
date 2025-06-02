@@ -7,8 +7,71 @@ from app.services.xai_service import create_and_save_xai_explanation
 from app.services.risk_management_service import apply_risk_management
 from app.db.models import Signal
 from datetime import datetime, timedelta
+from app.services.adaptive_asset_selector import AdaptiveAssetSelector
+from app.services.btcd_analyzer import BTCDominanceAnalyzer
+from app.data_providers.btcd_data_provider import MockBTCDDataProvider
+from app.core.event_bus import EVENT_BUS, MarketRegimeChangedEvent
+import asyncio
 
 logger = logging.getLogger(__name__)
+
+class SignalGenerationService:
+    def __init__(self, db: Session):
+        self.db = db
+        self.asset_selector = AdaptiveAssetSelector()
+        self.asset_pool = []
+        EVENT_BUS.subscribe(MarketRegimeChangedEvent, self.on_market_regime_changed)
+
+    async def on_market_regime_changed(self, event):
+        logger.info(f"[Event] Market regime changed: {event.payload}")
+        self.asset_pool = self.asset_selector.get_asset_pool(event.payload)
+        # (опционально) инициировать генерацию новых сигналов:
+        await self.generate_signals_for_asset_pool()
+
+    async def generate_signals_for_asset_pool(self):
+        signals = []
+        for asset_pair in self.asset_pool:
+            signal = generate_signal_for_asset(asset_pair, self.db)
+            if signal:
+                signals.append(signal)
+        logger.info(f"[Event] Signals generated for new asset pool: {self.asset_pool}")
+        return signals
+
+# --- Пример публикации события смены режима рынка ---
+async def detect_and_publish_market_regime():
+    data_provider = MockBTCDDataProvider()
+    btcd_analyzer = BTCDominanceAnalyzer(data_provider)
+    btcd_analyzer.update_data()
+    btcd_analyzer.calculate_technical_indicators()
+    btcd_analyzer.detect_patterns()
+    btcd_analyzer.identify_support_resistance()
+    market_regime = btcd_analyzer.get_market_regime()
+    await EVENT_BUS.publish(MarketRegimeChangedEvent(name="market_regime_changed", payload=market_regime))
+
+# --- Оригинальная функция для генерации сигналов по рынку ---
+def generate_signals_for_market_regime(db: Session):
+    """
+    Генерирует сигналы только по релевантным активам в зависимости от режима рынка (BTC.D, alt season и др.)
+    """
+    # 1. Инициализация анализатора и селектора
+    data_provider = MockBTCDDataProvider()
+    btcd_analyzer = BTCDominanceAnalyzer(data_provider)
+    asset_selector = AdaptiveAssetSelector()
+    # 2. Получение режима рынка и пула активов
+    btcd_analyzer.update_data()
+    btcd_analyzer.calculate_technical_indicators()
+    btcd_analyzer.detect_patterns()
+    btcd_analyzer.identify_support_resistance()
+    market_regime = btcd_analyzer.get_market_regime()
+    asset_pool = asset_selector.get_asset_pool(market_regime)
+    logger.info(f"Market regime: {market_regime}, asset pool: {asset_pool}")
+    # 3. Генерация сигналов только по asset_pool
+    signals = []
+    for asset_pair in asset_pool:
+        signal = generate_signal_for_asset(asset_pair, db)
+        if signal:
+            signals.append(signal)
+    return signals
 
 def generate_signal_for_asset(asset_pair: str, db: Session) -> Signal:
     """

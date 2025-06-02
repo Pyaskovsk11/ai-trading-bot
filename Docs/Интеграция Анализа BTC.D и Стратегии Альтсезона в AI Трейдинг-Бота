@@ -1,0 +1,386 @@
+# Интеграция Анализа BTC.D и Стратегии Альтсезона в AI Трейдинг-Бота
+
+## Введение
+
+Доминация Биткоина (BTC.D) является ключевым индикатором рыночных циклов в криптовалютной экосистеме. Как вы верно отметили, существует обратная зависимость между BTC.D и производительностью альткоинов: когда доминация падает, альткоины обычно демонстрируют значительный рост. Текущая техническая ситуация с формированием "восходящего клина" на графике BTC.D предполагает потенциальный разворот и начало альтсезона.
+
+Данная спецификация описывает комплексное улучшение вашего AI трейдинг-бота для эффективного использования этой рыночной динамики и максимизации прибыли в предстоящем альтсезоне, одновременно защищая капитал от высокой волатильности и "срубания хомяков".
+
+## 1. Модуль Анализа BTC.D
+
+### 1.1 Сбор и Предобработка Данных
+
+```python
+class BTCDominanceAnalyzer:
+    def __init__(self, data_provider, timeframes=['1d', '4h', '1h']):
+        self.data_provider = data_provider
+        self.timeframes = timeframes
+        self.btcd_data = {}
+        self.patterns = {}
+        self.support_resistance_levels = {
+            'major': [57, 62, 65, 70],  # Основные исторические уровни
+            'dynamic': []  # Будут рассчитаны динамически
+        }
+    
+    def update_data(self):
+        """Обновляет данные BTC.D по всем таймфреймам"""
+        for tf in self.timeframes:
+            self.btcd_data[tf] = self.data_provider.get_btc_dominance(timeframe=tf)
+            
+    def calculate_technical_indicators(self):
+        """Рассчитывает технические индикаторы для BTC.D"""
+        for tf, data in self.btcd_data.items():
+            # Добавляем основные индикаторы
+            data['ema50'] = ta.ema(data['close'], length=50)
+            data['ema200'] = ta.ema(data['close'], length=200)
+            data['rsi'] = ta.rsi(data['close'], length=14)
+            data['macd'], data['macd_signal'], data['macd_hist'] = ta.macd(data['close'])
+            
+            # Волатильность
+            data['atr'] = ta.atr(data['high'], data['low'], data['close'], length=14)
+```
+
+### 1.2 Детектор Паттернов BTC.D
+
+```python
+def detect_patterns(self):
+    """Обнаруживает ключевые паттерны на графике BTC.D"""
+    for tf, data in self.btcd_data.items():
+        # Инициализация результатов
+        self.patterns[tf] = {
+            'rising_wedge': False,
+            'falling_wedge': False,
+            'double_top': False,
+            'double_bottom': False,
+            'head_shoulders': False,
+            'inv_head_shoulders': False,
+            'breakdown': False,
+            'breakout': False
+        }
+        
+        # Детектор восходящего клина (Rising Wedge)
+        if self._detect_rising_wedge(data):
+            self.patterns[tf]['rising_wedge'] = True
+            
+        # Детектор пробоя уровня
+        if self._detect_breakdown(data):
+            self.patterns[tf]['breakdown'] = True
+            
+    return self.patterns
+
+def _detect_rising_wedge(self, data, lookback=90):
+    """
+    Детектирует паттерн 'восходящий клин'
+    Восходящий клин обычно является медвежьим паттерном разворота
+    """
+    if len(data) < lookback:
+        return False
+        
+    # Получаем данные для анализа
+    recent_data = data.tail(lookback)
+    
+    # Находим локальные максимумы и минимумы
+    highs = self._find_local_extrema(recent_data['high'], is_max=True)
+    lows = self._find_local_extrema(recent_data['low'], is_max=False)
+    
+    if len(highs) < 3 or len(lows) < 3:
+        return False
+    
+    # Проверяем, формируют ли максимумы и минимумы сходящиеся линии тренда с положительным наклоном
+    high_slope = self._calculate_slope(highs)
+    low_slope = self._calculate_slope(lows)
+    
+    # Для восходящего клина: оба наклона положительные, но наклон нижней линии больше
+    if high_slope > 0 and low_slope > 0 and low_slope > high_slope:
+        # Дополнительно проверяем объем (обычно снижается в клине)
+        if self._is_volume_declining(recent_data):
+            return True
+    
+    return False
+```
+
+### 1.3 Анализ Уровней Поддержки/Сопротивления
+
+```python
+def identify_support_resistance(self):
+    """Определяет динамические уровни поддержки и сопротивления"""
+    daily_data = self.btcd_data['1d']
+    
+    # Находим локальные максимумы и минимумы за последние 365 дней
+    lookback = min(365, len(daily_data))
+    recent_data = daily_data.tail(lookback)
+    
+    # Находим значимые уровни
+    highs = self._find_significant_levels(recent_data['high'], is_max=True)
+    lows = self._find_significant_levels(recent_data['low'], is_max=False)
+    
+    # Кластеризуем близкие уровни
+    all_levels = highs + lows
+    clustered_levels = self._cluster_levels(all_levels)
+    
+    # Обновляем динамические уровни
+    self.support_resistance_levels['dynamic'] = clustered_levels
+    
+    return self.support_resistance_levels
+```
+
+### 1.4 Индикатор Силы Альткоинов
+
+```python
+def calculate_altcoin_strength(self, top_alts=['ETH', 'BNB', 'SOL', 'XRP']):
+    """
+    Рассчитывает индекс силы альткоинов относительно BTC
+    Возвращает значение от 0 до 100, где:
+    - 0-20: Очень слабые альткоины (сильное доминирование BTC)
+    - 20-40: Слабые альткоины
+    - 40-60: Нейтральный рынок
+    - 60-80: Сильные альткоины
+    - 80-100: Очень сильные альткоины (альтсезон)
+    """
+    strength_scores = []
+    
+    for alt in top_alts:
+        # Получаем данные пары ALT/BTC
+        alt_btc_data = self.data_provider.get_pair_data(f"{alt}/BTC", timeframe='1d')
+        
+        # Рассчитываем относительную силу
+        alt_btc_data['ema20'] = ta.ema(alt_btc_data['close'], length=20)
+        alt_btc_data['ema50'] = ta.ema(alt_btc_data['close'], length=50)
+        
+        # Проверяем различные индикаторы силы
+        ema_cross = alt_btc_data['ema20'].iloc[-1] > alt_btc_data['ema50'].iloc[-1]
+        price_vs_ema = alt_btc_data['close'].iloc[-1] > alt_btc_data['ema20'].iloc[-1]
+        rsi = ta.rsi(alt_btc_data['close'], length=14).iloc[-1]
+        
+        # Рассчитываем балл силы для этого альткоина (0-100)
+        strength = 0
+        if ema_cross: strength += 30
+        if price_vs_ema: strength += 30
+        strength += min(40, rsi * 0.4)  # RSI вносит до 40 пунктов
+        
+        strength_scores.append(strength)
+    
+    # Средний балл по всем альткоинам
+    avg_strength = sum(strength_scores) / len(strength_scores)
+    
+    return avg_strength
+```
+
+## 2. Интеграция с Основной AI-Моделью
+
+### 2.1 Новые Признаки для AI-Модели
+
+```python
+def generate_btcd_features(self):
+    """Генерирует признаки на основе BTC.D для использования в AI-модели"""
+    features = {}
+    
+    # Базовые метрики
+    daily_data = self.btcd_data['1d']
+    features['btcd_current'] = daily_data['close'].iloc[-1]
+    features['btcd_change_1d'] = daily_data['close'].iloc[-1] / daily_data['close'].iloc[-2] - 1
+    features['btcd_change_7d'] = daily_data['close'].iloc[-1] / daily_data['close'].iloc[-7] - 1
+    features['btcd_change_30d'] = daily_data['close'].iloc[-1] / daily_data['close'].iloc[-30] - 1
+    
+    # Расстояние до ключевых уровней
+    all_levels = self.support_resistance_levels['major'] + self.support_resistance_levels['dynamic']
+    nearest_support = max([level for level in all_levels if level < features['btcd_current']], default=None)
+    nearest_resistance = min([level for level in all_levels if level > features['btcd_current']], default=None)
+    
+    if nearest_support:
+        features['btcd_distance_to_support'] = (features['btcd_current'] - nearest_support) / nearest_support
+    else:
+        features['btcd_distance_to_support'] = 1.0
+        
+    if nearest_resistance:
+        features['btcd_distance_to_resistance'] = (nearest_resistance - features['btcd_current']) / features['btcd_current']
+    else:
+        features['btcd_distance_to_resistance'] = 1.0
+    
+    # Индикаторы
+    features['btcd_rsi'] = daily_data['rsi'].iloc[-1]
+    features['btcd_above_ema50'] = 1 if daily_data['close'].iloc[-1] > daily_data['ema50'].iloc[-1] else 0
+    features['btcd_above_ema200'] = 1 if daily_data['close'].iloc[-1] > daily_data['ema200'].iloc[-1] else 0
+    
+    # Паттерны
+    for pattern, exists in self.patterns['1d'].items():
+        features[f'btcd_pattern_{pattern}'] = 1 if exists else 0
+    
+    # Индекс силы альткоинов
+    features['altcoin_strength_index'] = self.calculate_altcoin_strength() / 100.0
+    
+    return features
+```
+
+### 2.2 Интеграция с Основной Моделью Прогнозирования
+
+```python
+class EnhancedAIModel:
+    def __init__(self, base_model, btcd_analyzer):
+        self.base_model = base_model
+        self.btcd_analyzer = btcd_analyzer
+        self.market_regime = 'neutral'  # 'btc_dominance', 'alt_season', 'neutral'
+        
+    def update_market_regime(self):
+        """Определяет текущий режим рынка на основе анализа BTC.D"""
+        # Обновляем данные и анализ BTC.D
+        self.btcd_analyzer.update_data()
+        self.btcd_analyzer.calculate_technical_indicators()
+        patterns = self.btcd_analyzer.detect_patterns()
+        
+        # Получаем индекс силы альткоинов
+        alt_strength = self.btcd_analyzer.calculate_altcoin_strength()
+        
+        # Определяем режим рынка
+        if patterns['1d']['rising_wedge'] and patterns['1d']['breakdown']:
+            # Если есть восходящий клин и пробой вниз - вероятно начало альтсезона
+            self.market_regime = 'alt_season'
+        elif alt_strength > 70:
+            # Если индекс силы альткоинов высокий - альтсезон
+            self.market_regime = 'alt_season'
+        elif alt_strength < 30:
+            # Если индекс силы альткоинов низкий - доминирование BTC
+            self.market_regime = 'btc_dominance'
+        else:
+            # В остальных случаях - нейтральный режим
+            self.market_regime = 'neutral'
+            
+        return self.market_regime
+        
+    def predict(self, asset, features):
+        """Делает прогноз с учетом режима рынка и BTC.D"""
+        # Обновляем режим рынка
+        self.update_market_regime()
+        
+        # Получаем дополнительные признаки от BTC.D
+        btcd_features = self.btcd_analyzer.generate_btcd_features()
+        
+        # Объединяем все признаки
+        combined_features = {**features, **btcd_features}
+        
+        # Добавляем информацию о режиме рынка
+        combined_features['market_regime_btc_dominance'] = 1 if self.market_regime == 'btc_dominance' else 0
+        combined_features['market_regime_alt_season'] = 1 if self.market_regime == 'alt_season' else 0
+        combined_features['market_regime_neutral'] = 1 if self.market_regime == 'neutral' else 0
+        
+        # Проверяем, является ли актив биткоином или альткоином
+        is_bitcoin = asset.upper() == 'BTC'
+        combined_features['is_bitcoin'] = 1 if is_bitcoin else 0
+        
+        # Получаем базовый прогноз
+        base_prediction = self.base_model.predict(combined_features)
+        
+        # Корректируем прогноз с учетом режима рынка
+        adjusted_prediction = self._adjust_prediction(base_prediction, asset, self.market_regime)
+        
+        return adjusted_prediction
+        
+    def _adjust_prediction(self, base_prediction, asset, market_regime):
+        """Корректирует базовый прогноз с учетом режима рынка"""
+        is_bitcoin = asset.upper() == 'BTC'
+        
+        # Коэффициенты корректировки (можно настроить на основе бэктестинга)
+        adjustment_factor = 1.0
+        
+        if market_regime == 'alt_season' and not is_bitcoin:
+            # Усиливаем сигналы для альткоинов в альтсезон
+            adjustment_factor = 1.2
+        elif market_regime == 'alt_season' and is_bitcoin:
+            # Ослабляем сигналы для BTC в альтсезон
+            adjustment_factor = 0.8
+        elif market_regime == 'btc_dominance' and is_bitcoin:
+            # Усиливаем сигналы для BTC при его доминировании
+            adjustment_factor = 1.2
+        elif market_regime == 'btc_dominance' and not is_bitcoin:
+            # Ослабляем сигналы для альткоинов при доминировании BTC
+            adjustment_factor = 0.8
+            
+        # Применяем корректировку
+        adjusted_prediction = {
+            'direction': base_prediction['direction'],
+            'probability': base_prediction['probability'] * adjustment_factor,
+            'target_price': base_prediction['target_price'],
+            'confidence': base_prediction['confidence'] * adjustment_factor
+        }
+        
+        return adjusted_prediction
+```
+
+## 3. Стратегия Переключения Режимов
+
+### 3.1 Адаптивный Выбор Активов
+
+```python
+class AdaptiveAssetSelector:
+    def __init__(self, data_provider, btcd_analyzer, market_cap_threshold=10):
+        self.data_provider = data_provider
+        self.btcd_analyzer = btcd_analyzer
+        self.market_cap_threshold = market_cap_threshold  # В миллиардах USD
+        self.asset_pool = {
+            'btc_dominance': ['BTC', 'ETH'],  # Консервативный пул
+            'neutral': ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'AVAX', 'DOT'],  # Сбалансированный
+            'alt_season': []  # Будет заполнен динамически
+        }
+        
+    def update_alt_season_pool(self):
+        """Обновляет пул активов для альтсезона на основе рыночных данных"""
+        # Получаем топ-50 криптовалют по капитализации
+        top_assets = self.data_provider.get_top_assets_by_market_cap(limit=50)
+        
+        # Фильтруем по минимальной капитализации
+        filtered_assets = [asset for asset in top_assets 
+                          if asset['market_cap'] > self.market_cap_threshold * 1e9]
+        
+        # Рассчитываем метрики производительности
+        for asset in filtered_assets:
+            # Получаем данные за последние 30 дней
+            asset_data = self.data_provider.get_asset_data(asset['symbol'], timeframe='1d', limit=30)
+            
+            # Рассчитываем относительную силу к BTC
+            btc_data = self.data_provider.get_asset_data('BTC', timeframe='1d', limit=30)
+            
+            # Относительная производительность за 7 и 30 дней
+            asset['rel_perf_7d'] = (asset_data['close'].iloc[-1] / asset_data['close'].iloc[-7]) / \
+                                  (btc_data['close'].iloc[-1] / btc_data['close'].iloc[-7])
+            asset['rel_perf_30d'] = (asset_data['close'].iloc[-1] / asset_data['close'].iloc[-30]) / \
+                                   (btc_data['close'].iloc[-1] / btc_data['close'].iloc[-30])
+            
+            # Волатильность
+            asset['volatility'] = asset_data['close'].pct_change().std() * np.sqrt(365)
+            
+            # Объем торгов
+            asset['volume_btc_ratio'] = asset_data['volume'].mean() / btc_data['volume'].mean()
+            
+            # Комбинированный скор для альтсезона
+            asset['alt_season_score'] = (asset['rel_perf_7d'] * 0.4 + 
+                                        asset['rel_perf_30d'] * 0.3 + 
+                                        asset['volume_btc_ratio'] * 0.3)
+        
+        # Сортируем по скору и выбираем топ-20
+        filtered_assets.sort(key=lambda x: x['alt_season_score'], reverse=True)
+        self.asset_pool['alt_season'] = [asset['symbol'] for asset in filtered_assets[:20]]
+        
+        return self.asset_pool['alt_season']
+        
+    def get_assets_for_current_regime(self):
+        """Возвращает список активов для текущего режима рынка"""
+        # Обновляем режим рынка
+        market_regime = self.btcd_analyzer.get_market_regime()
+        
+        # Если режим - альтсезон, обновляем пул альткоинов
+        if market_regime == 'alt_season':
+            self.update_alt_season_pool()
+            
+        return self.asset_pool[market_regime]
+```
+
+### 3.2 Адаптивное Управление Риском
+
+```python
+class AdaptiveRiskManager:
+    def __init__(self, btcd_analyzer, base_risk_per_trade=0.01):
+        self.btcd_analyzer = btcd_analyzer
+        self.base_risk_per_trade = base_risk_per_trade  # Базовый риск на сделку (1%)
+        
+    def calculate_position_size(self, asset, entry_price, stop_loss_price,
+(Content truncated due to size limit. Use line ranges to read in chunks)

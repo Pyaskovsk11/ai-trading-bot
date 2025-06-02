@@ -1,10 +1,11 @@
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, CheckConstraint, Index
+    Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, CheckConstraint, Index, UniqueConstraint
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from sqlalchemy import event
 
 Base = declarative_base()
 
@@ -46,6 +47,8 @@ class XAIExplanation(Base):
     factors_used = Column(JSONB, nullable=True, comment="Factors used for explanation (JSONB)")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="Created at")
     model_version = Column(String(50), nullable=True, comment="XAI model version")
+    rag_enhanced = Column(Boolean, default=False, nullable=False, comment="RAG enhanced flag")
+    rag_sources = Column(JSONB, nullable=True, comment="RAG sources")
 
     signals = relationship("Signal", back_populates="xai_explanation")
 
@@ -81,6 +84,9 @@ class Signal(Base):
     xai_explanation_id = Column(Integer, ForeignKey('xai_explanations.id', name='fk_signals_xai_explanation_id'), nullable=True)
     smart_money_influence = Column(Float, nullable=True, comment="Smart money influence [-1,1]")
     volatility_estimate = Column(Float, nullable=True, comment="Volatility estimate")
+    ai_enhanced = Column(Boolean, default=False, nullable=False, comment="AI enhanced flag")
+    ai_confidence_score = Column(Float, nullable=True, comment="AI confidence score")
+    ai_factors = Column(JSONB, nullable=True, comment="AI factors used")
 
     xai_explanation = relationship("XAIExplanation", back_populates="signals")
     trades = relationship("Trade", back_populates="signal", passive_deletes=True)
@@ -168,4 +174,80 @@ class SignalNewsRelevance(Base):
     news_article = relationship("NewsArticle", back_populates="news_relevance")
 
     def __repr__(self):
-        return f"<SignalNewsRelevance(id={self.id}, signal_id={self.signal_id}, news_id={self.news_id})>" 
+        return f"<SignalNewsRelevance(id={self.id}, signal_id={self.signal_id}, news_id={self.news_id})>"
+
+class RAGChunk(Base):
+    __tablename__ = 'rag_chunks'
+    __table_args__ = (
+        Index('idx_rag_chunks_source', 'source_id', 'source_type'),
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_id = Column(Integer, nullable=False)
+    source_type = Column(String(50), nullable=False)
+    content = Column(Text, nullable=False)
+    chunk_meta = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class RAGEmbedding(Base):
+    __tablename__ = 'rag_embeddings'
+    __table_args__ = (
+        Index('idx_rag_embeddings_chunk', 'chunk_id'),
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chunk_id = Column(Integer, ForeignKey('rag_chunks.id', ondelete='CASCADE'), nullable=False)
+    embedding = Column(ARRAY(Float), nullable=False)
+    model_id = Column(Integer, ForeignKey('ai_models.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    chunk = relationship('RAGChunk', backref='embeddings')
+    model = relationship('AIModel')
+
+class AIModel(Base):
+    __tablename__ = 'ai_models'
+    __table_args__ = (
+        UniqueConstraint('name', 'version', name='uq_model_name_version'),
+        Index('idx_ai_models_type_active', 'type', 'is_active'),
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    type = Column(String(50), nullable=False)
+    version = Column(String(20), nullable=False)
+    parameters = Column(JSONB, nullable=True)
+    metrics = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_updated = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    embeddings = relationship('RAGEmbedding', back_populates='model')
+    predictions = relationship('AIPrediction', back_populates='model')
+
+class AIPrediction(Base):
+    __tablename__ = 'ai_predictions'
+    __table_args__ = (
+        Index('idx_ai_predictions_signal', 'signal_id'),
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    signal_id = Column(Integer, ForeignKey('signals.id'), nullable=False)
+    model_id = Column(Integer, ForeignKey('ai_models.id'), nullable=False)
+    prediction_type = Column(String(50), nullable=False)
+    prediction_value = Column(Float, nullable=False)
+    confidence = Column(Float, nullable=False)
+    features_used = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    signal = relationship('Signal')
+    model = relationship('AIModel', back_populates='predictions')
+
+def add_new_fields():
+    if not hasattr(Signal, 'ai_enhanced'):
+        Signal.ai_enhanced = Column(Boolean, default=False, nullable=False, comment="AI enhanced flag")
+    if not hasattr(Signal, 'ai_confidence_score'):
+        Signal.ai_confidence_score = Column(Float, nullable=True, comment="AI confidence score")
+    if not hasattr(Signal, 'ai_factors'):
+        Signal.ai_factors = Column(JSONB, nullable=True, comment="AI factors used")
+    if not hasattr(XAIExplanation, 'rag_enhanced'):
+        XAIExplanation.rag_enhanced = Column(Boolean, default=False, nullable=False, comment="RAG enhanced flag")
+    if not hasattr(XAIExplanation, 'rag_sources'):
+        XAIExplanation.rag_sources = Column(JSONB, nullable=True, comment="RAG sources")
+
+add_new_fields() 

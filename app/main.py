@@ -3,7 +3,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from app.api import signals, users, news, trades
+from app.api import signals, users, news, trades, deep_learning, adaptive_trading
+from app.api.endpoints import coins
+from app.api.v1 import strategy, backtest
 from app.utils.scheduler import start_scheduler
 
 load_dotenv()
@@ -37,8 +39,13 @@ def read_root() -> dict:
 # app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(signals.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
-app.include_router(news.router, prefix="/api/v1")
+app.include_router(news.router, prefix="/api/v1/news", tags=["News"])
 app.include_router(trades.router, prefix="/api/v1")
+app.include_router(deep_learning.router, prefix="/api/v1")
+app.include_router(adaptive_trading.router, prefix="/api/v1")
+app.include_router(strategy.router, prefix="/api/v1")
+app.include_router(backtest.router, prefix="/api/v1")
+app.include_router(coins.router, prefix="/api/v1/coins", tags=["Coins"])
 # app.include_router(trades.router, prefix="/api/v1/trades", tags=["Trades"])
 
 start_scheduler() 

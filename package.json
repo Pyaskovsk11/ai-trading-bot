@@ -1,0 +1,40 @@
+{
+  "name": "ai_trading_bot-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo for AI Trading Bot: backend (Python) + multiple frontends (React, Vite)",
+  "workspaces": [
+    "frontend",
+    "trading_bot_ui",
+    "beszel/beszel/site"
+  ],
+  "scripts": {
+    "frontend:start": "npm --prefix frontend start",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:test": "npm --prefix frontend test",
+    "ui:start": "npm --prefix trading_bot_ui start",
+    "ui:build": "npm --prefix trading_bot_ui run build",
+    "ui:test": "npm --prefix trading_bot_ui test",
+    "beszel:dev": "npm --prefix beszel/beszel/site run dev",
+    "beszel:build": "npm --prefix beszel/beszel/site run build",
+    "beszel:test": "echo 'No tests specified for beszel'",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --ignore-path .gitignore",
+    "format": "prettier --write ."
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.4.0",
+    "eslint-plugin-react": "^7.37.5",
+    "husky": "^9.0.11",
+    "prettier": "^3.2.5"
+  },
+  "dependencies": {
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-rtl": "^0.9.0"
+  }
+}
