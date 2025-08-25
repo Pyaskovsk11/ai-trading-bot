@@ -43,7 +43,7 @@ const Settings: React.FC = () => {
   const { data: currentSettings } = useQuery<TradingSettings>({
     queryKey: ['adaptive-trading-settings'],
     queryFn: async () => {
-      const response = await fetch('/api/v1/adaptive-trading/settings');
+      const response = await fetch('/api/v1/trading-settings/current');
       return response.json();
     }
   });
@@ -60,7 +60,7 @@ const Settings: React.FC = () => {
   // Мутация для обновления профиля
   const updateProfileMutation = useMutation(
     async (profile: string) => {
-      const response = await fetch('/api/v1/adaptive-trading/profile', {
+      const response = await fetch('/api/v1/trading-settings/profile/' + profile, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profile })
@@ -78,7 +78,7 @@ const Settings: React.FC = () => {
   // Мутация для обновления AI режима
   const updateAIModeMutation = useMutation(
     async (mode: string) => {
-      const response = await fetch('/api/v1/adaptive-trading/ai-mode', {
+      const response = await fetch('/api/v1/trading-settings/mode/' + mode, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode })
@@ -87,7 +87,7 @@ const Settings: React.FC = () => {
     },
     {
       onSuccess: () => {
-        toast.success('AI режим обновлен!');
+        toast.success('Режим торговли обновлен!');
         queryClient.invalidateQueries({ queryKey: ['adaptive-trading-settings'] });
       }
     }
@@ -174,6 +174,35 @@ const Settings: React.FC = () => {
     }
   );
 
+  // Мутации для включения/выключения торговли
+  const enableTradingMutation = useMutation(
+    async () => {
+      const response = await fetch('/api/v1/trading-settings/enable', { method: 'POST' });
+      return response.json();
+    },
+    {
+      onSuccess: () => {
+        toast.success('Торговля включена');
+        queryClient.invalidateQueries({ queryKey: ['adaptive-trading-settings'] });
+      },
+      onError: () => toast.error('Ошибка включения торговли')
+    }
+  );
+
+  const disableTradingMutation = useMutation(
+    async () => {
+      const response = await fetch('/api/v1/trading-settings/disable', { method: 'POST' });
+      return response.json();
+    },
+    {
+      onSuccess: () => {
+        toast.success('Торговля выключена');
+        queryClient.invalidateQueries({ queryKey: ['adaptive-trading-settings'] });
+      },
+      onError: () => toast.error('Ошибка выключения торговли')
+    }
+  );
+
   const handleToggleAlertType = (alertType: string, enabled: boolean) => {
     const currentAlerts = alertSettings?.settings?.enabled_alerts || [];
     const newAlerts = enabled 
@@ -250,11 +279,27 @@ const Settings: React.FC = () => {
             <div className="space-y-6">
               {/* Профиль агрессивности */}
               <div className="card">
-                <div className="p-6 border-b border-dark-700">
-                  <h3 className="text-lg font-semibold">Профиль агрессивности</h3>
-                  <p className="text-gray-400 text-sm mt-1">
-                    Настройка уровня риска и агрессивности торговли
-                  </p>
+                <div className="p-6 border-b border-dark-700 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Профиль агрессивности</h3>
+                    <p className="text-gray-400 text-sm mt-1">
+                      Настройка уровня риска и агрессивности торговли
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => enableTradingMutation.mutate()}
+                      className="btn btn-success flex items-center gap-2"
+                    >
+                      <Play className="w-4 h-4" /> Включить
+                    </button>
+                    <button
+                      onClick={() => disableTradingMutation.mutate()}
+                      className="btn btn-danger flex items-center gap-2"
+                    >
+                      <StopCircle className="w-4 h-4" /> Выключить
+                    </button>
+                  </div>
                 </div>
                 <div className="p-6 space-y-4">
                   {['conservative', 'moderate', 'aggressive'].map((profile) => (

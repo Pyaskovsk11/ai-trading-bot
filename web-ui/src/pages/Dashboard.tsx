@@ -13,14 +13,22 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
+const safeFetchJson = async (url: string) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return {};
+    // пытаемся распарсить JSON, иначе возвратим пустой объект
+    try { return await res.json(); } catch { return {}; }
+  } catch {
+    return {};
+  }
+};
+
 const Dashboard: React.FC = () => {
   // Получение данных о производительности
   const { data: performanceData } = useQuery({
     queryKey: ['adaptive-trading-performance'],
-    queryFn: async () => {
-      const response = await fetch('/api/v1/adaptive-trading/performance');
-      return response.json();
-    },
+    queryFn: async () => await safeFetchJson('/api/v1/adaptive-trading/performance'),
     refetchInterval: 30000
   });
 
@@ -37,10 +45,7 @@ const Dashboard: React.FC = () => {
   // Получение последних сигналов
   const { data: recentSignals } = useQuery({
     queryKey: ['recent-signals'],
-    queryFn: async () => {
-      const response = await fetch('/api/v1/adaptive-trading/signal-history?limit=10');
-      return response.json();
-    },
+    queryFn: async () => await safeFetchJson('/api/v1/adaptive-trading/signal-history?limit=10'),
     refetchInterval: 10000
   });
 
@@ -79,6 +84,10 @@ const Dashboard: React.FC = () => {
         <p className="text-gray-400 mt-2">
           Обзор производительности AI Trading Bot в реальном времени
         </p>
+        <div className="mt-4 flex gap-3">
+          <a href="/strategies" className="btn btn-primary">Выбрать стратегию</a>
+          <a href="/security-keys" className="btn">Ввести API-ключи</a>
+        </div>
       </div>
 
       {/* Основные метрики */}
@@ -116,7 +125,7 @@ const Dashboard: React.FC = () => {
               <Target className="w-6 h-6 text-white" />
             </div>
           </div>
-          <div className="mt-4 flex items-center space-x-2 text-sm">
+          <div className="mt-4 flex items_center space-x-2 text-sm">
             <TrendingUp className="w-4 h-4 text-success-400" />
             <span className="text-success-400">Высокая</span>
             <span className="text-gray-400">точность</span>
@@ -125,7 +134,7 @@ const Dashboard: React.FC = () => {
 
         {/* Buy сигналы */}
         <div className="card p-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items_center justify_between">
             <div>
               <p className="text-sm text-gray-400">Buy сигналов</p>
               <p className="text-2xl font-bold text-success-400">
@@ -133,7 +142,7 @@ const Dashboard: React.FC = () => {
               </p>
             </div>
             <div className="p-3 bg-success-600 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-white" />
+              <TrendingUp className="w-6 h-6 text_white" />
             </div>
           </div>
           <div className="mt-4 flex items-center space-x-2 text-sm">
@@ -247,7 +256,7 @@ const Dashboard: React.FC = () => {
             {/* LSTM */}
             <div className="flex items-center justify-between p-4 bg-dark-700 rounded-lg">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-primary-600 rounded-lg">
+                <div className="p-2 bg_primary-600 rounded-lg">
                   <Activity className="w-5 h-5 text-white" />
                 </div>
                 <div>
@@ -265,7 +274,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between p-4 bg-dark-700 rounded-lg">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-success-600 rounded-lg">
-                  <Brain className="w-5 h-5 text-white" />
+                  <Brain className="w-5 h-5 text_white" />
                 </div>
                 <div>
                   <h4 className="font-medium">CNN Model</h4>

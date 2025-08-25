@@ -1,13 +1,17 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
-import Portfolio from './components/Portfolio';
-import CoinsMonitoring from './pages/CoinsMonitoring';
-import TradingChartPage from './pages/TradingChartPage';
-import Settings from './pages/Settings';
+import RealTrading from './pages/RealTrading';
+import TradeHistory from './pages/TradeHistory';
+import StrategyLibrary from './pages/StrategyLibrary';
+import SecurityKeys from './pages/SecurityKeys';
+// import StrategyCompare from './pages/StrategyCompare';
+import Scanner from './pages/Scanner';
+import AdminBacktest from './pages/AdminBacktest';
+import Onboarding from './pages/Onboarding';
 
 // Создаем клиент для React Query
 const queryClient = new QueryClient({
@@ -30,10 +34,14 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/portfolio" element={<Portfolio />} />
-              <Route path="/coins-monitoring" element={<CoinsMonitoring />} />
-              <Route path="/trading-chart/:symbol" element={<TradingChartPage />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/settings" element={<SecurityKeys />} />
+              <Route path="/real-trading" element={<RealTrading />} />
+              <Route path="/trade-history" element={<TradeHistory />} />
+              <Route path="/strategies" element={<StrategyLibrary />} />
+              <Route path="/security-keys" element={<SecurityKeys />} />
+              <Route path="/scanner" element={<Scanner />} />
+              <Route path="/admin/backtest" element={<AdminBacktest />} />
+              <Route path="/onboarding" element={<Onboarding />} />
             </Routes>
           </main>
         </div>

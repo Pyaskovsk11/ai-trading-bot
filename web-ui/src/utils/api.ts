@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // Прямое подключение к backend (CORS уже настроен в FastAPI)
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -53,6 +53,12 @@ export const apiMethods = {
     updateProfile: (profile: string) => api.post('/api/emergency-stop', { profile }).catch(() => ({ data: { success: false } })),
     updateAIMode: (mode: string) => api.post('/api/emergency-stop', { mode }).catch(() => ({ data: { success: false } })),
   },
+};
+
+export const backtestApi = {
+  run: (data: any) => api.post('/api/v1/backtest/run', data),
+  status: (backtestId: string) => api.get(`/api/v1/backtest/status/${backtestId}`),
+  result: (backtestId: string) => api.get(`/api/v1/backtest/result/${backtestId}`),
 };
 
 export default api; 
