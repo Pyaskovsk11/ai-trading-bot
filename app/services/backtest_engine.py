@@ -178,6 +178,13 @@ class BacktestEngine:
             self._current_timeframe = timeframe
             self._donchian_k = max(5, int(donchian_k))
             self._breakout_volume_min = float(breakout_volume_min)
+            # Настройка кулдауна по таймфрейму (минимальный интервал между входами в одну сторону)
+            if timeframe == '15m':
+                self._min_same_side_cooldown_bars = 12  # ~3 часа
+            elif timeframe == '5m':
+                self._min_same_side_cooldown_bars = 15  # ~75 минут
+            else:
+                self._min_same_side_cooldown_bars = 8   # дефолт для более высоких ТФ
             
             # Генерация исторических данных
             historical_data = await self._generate_historical_data(symbols, start_date, end_date, timeframe)
@@ -481,6 +488,24 @@ class BacktestEngine:
                                 return self._create_hold_signal("HTF(1h) фильтр: нет медвежьего подтверждения")
                 except Exception:
                     # При ошибке MTF-фильтр не блокирует, продолжаем
+                    pass
+            # Доп. MTF-фильтр для 15m: подтверждение на 4h (EMA и MACD согласованы)
+            if strategy_mode == 'trend_only' and timeframe in ['15m']:
+                try:
+                    h4 = await self._get_recent_data_for_analysis(symbol, timestamp, '4h')
+                    if len(h4) >= 50:
+                        h4_ind = self._calculate_technical_indicators(h4)
+                        ema12_h4 = h4_ind.get('ema_12', indicators.get('ema_12', price))
+                        ema26_h4 = h4_ind.get('ema_26', indicators.get('ema_26', price))
+                        macd_hist_h4 = h4_ind.get('macd_histogram', 0.0)
+                        vol_ratio_h4 = h4_ind.get('volume_ratio', 1.0)
+                        if indicators.get('ema_12', price) > indicators.get('ema_26', price):
+                            if not (ema12_h4 > ema26_h4 and macd_hist_h4 > 0 and vol_ratio_h4 >= 1.05):
+                                return self._create_hold_signal("HTF(4h) фильтр: нет бычьего подтверждения")
+                        elif indicators.get('ema_12', price) < indicators.get('ema_26', price):
+                            if not (ema12_h4 < ema26_h4 and macd_hist_h4 < 0 and vol_ratio_h4 >= 1.05):
+                                return self._create_hold_signal("HTF(4h) фильтр: нет медвежьего подтверждения")
+                except Exception:
                     pass
             # MTF-фильтр для 5m: требуем подтверждение на 15m (только для режима trend_only)
             if strategy_mode == 'trend_only' and timeframe in ['5m']:
@@ -896,9 +921,7 @@ class BacktestEngine:
             entry_quality = (volume_ratio >= 1.6) and (adx >= 15.0 or bb_width >= 0.02)
             if not entry_quality:
                 return self._create_hold_signal("SOL: entry quality gate (vol/adx/bb)")
-            # Усиление порогов для снижения частоты и повышения качества входов
-            strong_threshold += 4
-            moderate_threshold += 4
+            # Усиление порогов для снижения частоты и повышения качества входов (будет применено ниже после инициализации порогов)
             if rsi > 58:
                 buy_score += 5
                 confidence_factors.append("RSI>58 (SOL)")
@@ -1042,10 +1065,13 @@ class BacktestEngine:
             sell_score = int(sell_score * 0.7)
             confidence_factors.append("Период низкой активности - снижена агрессивность")
         
-        # Для 15m/1h: блокируем входы ночью (UTC 0-2) - сокращен период
+        # Для 15m: торговые окна 6-22 UTC (избегаем низкой активности)
         tf_cur = getattr(self, '_current_timeframe', '1h')
-        if tf_cur in ['15m', '1h'] and is_low_activity:
-            return self._create_hold_signal("Ночной период (15m/1h) - входы отключены")
+        if tf_cur in ['15m']:
+            if hour < 6 or hour > 22:
+                return self._create_hold_signal("15m: вне торгового окна 6-22 UTC")
+        elif tf_cur in ['1h'] and is_low_activity:
+            return self._create_hold_signal("1h: ночной период — входы отключены")
         
         # Охлаждение после резкого движения (>2% за бар) — 2 бара на 15m
         pc_last = indicators.get('price_change_last', 0.0)
@@ -1076,12 +1102,15 @@ class BacktestEngine:
         # Фильтр конфликтующих сигналов (еще более мягкий)
         signal_conflict = abs(buy_score - sell_score) < 5  # Уменьшено с 8 до 5
         if signal_conflict and max(buy_score, sell_score) < 20:  # Уменьшено с 28 до 20
-            # Попытка лёгкого сигнала при EMA/объёме
-            if ema_12 > ema_26 and volume_ratio >= 1.0:  # Снижено с 1.2 до 1.0
-                buy_score += 15  # Увеличено с 10 до 15
+            # На 15m отключаем лёгкие входы при конфликте — только HOLD
+            if getattr(self, '_current_timeframe', '1h') == '15m':
+                return self._create_hold_signal("15m: конфликт сигналов — HOLD")
+            # Попытка лёгкого сигнала при EMA/объёме на других ТФ
+            if ema_12 > ema_26 and volume_ratio >= 1.0:
+                buy_score += 15
                 confidence_factors.append("Light buy via EMA/volume (conflict)")
-            elif ema_12 < ema_26 and volume_ratio >= 1.0:  # Снижено с 1.2 до 1.0
-                sell_score += 15  # Увеличено с 10 до 15
+            elif ema_12 < ema_26 and volume_ratio >= 1.0:
+                sell_score += 15
                 confidence_factors.append("Light sell via EMA/volume (conflict)")
             else:
                 return self._create_hold_signal("Неопределенные сигналы - ожидание")
@@ -1156,23 +1185,33 @@ class BacktestEngine:
         elif market_regime == 'high_volatility':
             sl_mult *= 1.2
             tp_mult *= 1.2
+        # Доп. увеличение TP для SOL в bull_trend
+        if market_regime == 'bull_trend' and symbol.upper().startswith('SOL'):
+            tp_mult *= 1.1
 
         # Небольшое усиление порогов для снижения количества низкокачественных входов
         strong_threshold = int(strong_threshold + 2)
         moderate_threshold = int(moderate_threshold + 2)
+        # Доп. усиление для SOL (смещение порогов после инициализации)
+        if symbol.upper().startswith('SOL'):
+            strong_threshold += 4
+            moderate_threshold += 4
         
         # Улучшенные входные условия для 15m (all/trend_only):
         if tf_cur in ['15m']:
-            # Гейт по EMA/SMA и объёму (ослабленные условия)
-            if not ((ema_12 > ema_26 and price > sma_20 and volume_ratio >= 1.2) or (ema_12 < ema_26 and price < sma_20 and volume_ratio >= 1.2)):
+            # Минимальная волатильность: ATR/price порог, чтобы отсечь шум
+            atr_val = indicators.get('atr', max(1e-6, price * 0.005))
+            if atr_val / max(1e-6, price) < 0.0045:
+                return self._create_hold_signal("15m: низкая волатильность (ATR/price)")
+            # Гейт по EMA/SMA и объёму
+            if not ((ema_12 > ema_26 and price > sma_20 and volume_ratio >= 1.6) or (ema_12 < ema_26 and price < sma_20 and volume_ratio >= 1.6)):
                 return self._create_hold_signal("15m: условия EMA/SMA/объём не выполнены")
-            # Задержка 1 бар после пересечения EMA12/EMA26 (убрана для большего количества сигналов)
-            # MACD + RSI фильтры импульса (ослабленные)
+            # MACD + RSI фильтры импульса (ужесточённые)
             macd_hist = indicators.get('macd_histogram', 0.0)
             rsi_val = indicators.get('rsi', 50)
-            if ema_12 > ema_26 and not (macd_hist > -0.1 and rsi_val > 45):  # Ослаблены условия
+            if ema_12 > ema_26 and not (macd_hist > 0.0 and rsi_val > 50):
                 return self._create_hold_signal("15m: слабый импульс для лонга (MACD/RSI)")
-            if ema_12 < ema_26 and not (macd_hist < 0.1 and rsi_val < 55):  # Ослаблены условия
+            if ema_12 < ema_26 and not (macd_hist < 0.0 and rsi_val < 50):
                 return self._create_hold_signal("15m: слабый импульс для шорта (MACD/RSI)")
         
         # Определение финального сигнала - АДАПТИВНЫЕ ПОРОГИ
@@ -1438,6 +1477,7 @@ class BacktestEngine:
                 if tf_cur == '15m' and duration_hours >= 2.0 and r_multiple < 0.5:
                     positions_to_close.append((symbol, current_price, 'time_stop_15m'))
                     continue
+
                 # Для SOL на 1h — более строгий тайм-стоп: 12 часов при отсутствии 0.5R
                 if tf_cur == '1h' and symbol.upper().startswith('SOL') and duration_hours >= 12.0 and r_multiple < 0.5:
                     positions_to_close.append((symbol, current_price, 'time_stop_SOL_1h'))
